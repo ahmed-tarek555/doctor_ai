@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import pickle
-from tokenizer import vocab_size
+from tokenizer import tokenizer
 from utils import get_batch, block_size, device
 
-n_emb = 384
-n_heads = 6
+n_emb = 512
+n_heads = 8
 dropout = 0.2
 
 with torch.no_grad():
@@ -93,6 +93,8 @@ class LanguageModel(nn.Module):
                                     Block(n_emb, 4),
                                     Block(n_emb, 4),
                                     Block(n_emb, 4),
+                                    Block(n_emb, 4),
+                                    Block(n_emb, 4),
                                     nn.LayerNorm(n_emb),
                                     )
         self.lm_head = nn.Linear(n_emb, vocab_size)
@@ -130,26 +132,26 @@ class LanguageModel(nn.Module):
         optim = torch.optim.AdamW(self.parameters(), lr)
         for i in range(n_iter):
             x, y = get_batch(data)
-            loss = self(x, y)
+            optim.zero_grad()
+            with torch.autocast(device_type=device, dtype=torch.bfloat16):
+                loss = self(x, y)
             if i% 100 == 0:
                 print(loss.item())
-
-            optim.zero_grad()
             loss.backward()
-
             optim.step()
             if i% (n_iter/100) == 0:
                 print(int(((i+1)/n_iter)*100))
         self.eval()
 
 if __name__ == '__main__':
-    with open('tokens.pkl', 'rb') as f:
+    with open('tokenized_data.pkl', 'rb') as f:
         tokens = pickle.load(f)
     n = int(len(tokens) * 0.9)
     val_tokens = tokens[n:]
     val_tokens = torch.tensor(tokens).to(device)
-    model = LanguageModel(vocab_size)
+    model = LanguageModel(tokenizer.n_vocab)
     model = model.to(device)
+    model = torch.compile(model)
     model.load_state_dict(torch.load('parameters.pth', map_location=torch.device(device)))
     val_loss = get_loss(val_tokens, model)
     print(f'Validation loss is {val_loss}')
