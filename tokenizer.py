@@ -1,11 +1,12 @@
 import pickle
+import json
 from utils import text
+import tiktoken
+
+
+tokenizer = tiktoken.get_encoding('gpt2')
 
 vocab_size = 1000
-
-# with open('tokenizer_data.txt', mode='r', encoding='utf-8') as file:
-#     tokenizer_text = file.read()
-
 def get_stats(tokens):
     counts = {}
     for pair in zip(tokens, tokens[1:]):
@@ -65,18 +66,5 @@ class Tokenizer:
 
 
 if __name__ == '__main__':
-    tokenizer = Tokenizer(vocab_size)
-    # merges, vocab = tokenizer(text)
-    #
-    # with open('merges.pkl', 'wb') as file:
-    #     pickle.dump(merges, file)
-    #
-    # with open('vocab.pkl', 'wb') as file:
-    #     pickle.dump(vocab, file)
-    #
-    with open('merges.pkl', 'rb') as f:
-        merges = pickle.load(f)
-
-    tokens = tokenizer.encode(text, merges)
-    with open('tokenized_convo.pkl', 'wb') as file:
-        pickle.dump(tokens, file)
+    with open('chat_templated_convo.jsonl', mode='r') as f:
+        convo = json.load(f)
