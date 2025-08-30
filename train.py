@@ -2,13 +2,16 @@ import pickle
 import torch
 from utils import device
 from model import LanguageModel
-from tokenizer import vocab_size
+from tokenizer import tokenizer
 
 lr = 3e-4
-model = LanguageModel(vocab_size)
+model = LanguageModel(tokenizer.n_vocab)
 model = model.to(device)
-with open('tokens.pkl', 'rb') as f:
+model = torch.compile(model)
+
+with open('tokenized_data.pkl', 'rb') as f:
     tokens = pickle.load(f)
+
 n = int(len(tokens) * 0.9)
 train_tokens = tokens[:n]
 train_tokens = torch.tensor(train_tokens).to(device)
