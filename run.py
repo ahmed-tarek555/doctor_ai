@@ -1,16 +1,32 @@
 import torch
-import pickle
 from utils import device, block_size
 from model import LanguageModel
-from tokenizer import Tokenizer, vocab_size
+from tokenizer import tokenizer
 
-tokenizer = Tokenizer(vocab_size)
-model = LanguageModel(vocab_size)
+model = LanguageModel(tokenizer.n_vocab)
+model = torch.compile(model)
 model.load_state_dict(torch.load('parameters.pth', map_location=torch.device(device)))
 
-with open('vocab.pkl', 'rb') as f:
-    vocab = pickle.load(f)
+def format_example(example):
+    return f"{example['role']}: {example['content']}\n"
 
-idx = torch.zeros(1, 1, dtype=torch.long)
-generated_tokens = model.generate(idx, 1000)[0][block_size:].tolist()
-print(tokenizer.decode(generated_tokens, vocab))
+context = [
+    {'role': 'Human', 'content': 'Hello, how are you?'},
+]
+
+while True:
+
+    prompt = input()
+    context.append({'role': 'Human', 'content': f'{prompt}'})
+
+    chat = ''.join([format_example(message) for message in context])
+    chat += 'Ai:'
+
+    input_tokens = torch.tensor(tokenizer.encode(chat), dtype=torch.long).unsqueeze(0)
+
+    generated_tokens = model.generate(input_tokens, 50)[0].tolist()
+    generated_tokens = generated_tokens[input_tokens.shape[-1]:]
+    generated_text = tokenizer.decode(generated_tokens)
+    context.append({'role': 'Ai', 'content': f'{generated_text}'})
+
+    print(f'{generated_text}\n')
