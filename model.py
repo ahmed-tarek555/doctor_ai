@@ -3,24 +3,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 import pickle
 from tokenizer import tokenizer
-from utils import get_batch, block_size, device
+from utils import get_loss, block_size, device
 
 n_emb = 512
 n_heads = 8
 dropout = 0.2
-
-with torch.no_grad():
-    def get_loss(data, model):
-        model.eval()
-        sum = 0
-        len = 0
-        for i in range(100):
-            x, y = get_batch(data)
-            loss = model(x, y)
-            sum += loss.item()
-            len += 1
-        return sum/len
-
 
 class Head(nn.Module):
     def __init__(self, head_size):
@@ -33,15 +20,14 @@ class Head(nn.Module):
 
     def forward(self, x):
         B, T, C = x.shape
-        k = self.key(x)   # (B, T, 16)
-        q = self.query(x) # (B, T, 16)
+        k = self.key(x)   # (B, T, head_size)
+        q = self.query(x) # (B, T, head_size)
         wei = q @ k.transpose(-2, -1) * C**-0.5 #--> (B, T, T)
         wei = wei.masked_fill(self.tril[:T, :T] == 0, float('-inf'))
         wei = F.softmax(wei, dim=1)
         wei = self.dropout(wei)
         v = self.value(x)
         out = wei @ v
-
         return out
 
 class MultiHeadAttention(nn.Module):
@@ -99,6 +85,17 @@ class LanguageModel(nn.Module):
                                     )
         self.lm_head = nn.Linear(n_emb, vocab_size)
 
+        self.token_embedding_table.weight = self.lm_head.weight
+
+        self.apply(self._init_weights)
+    def _init_weights(self, module):
+        if isinstance(module, nn.Linear):
+            torch.nn.init.normal_(module.weight, mean=0, std=0.02)
+            if module.bias is not None:
+                torch.nn.init.zeros_(module.bias)
+        elif isinstance(module, nn.Embedding):
+            torch.nn.init.normal_(module.weight, mean=0, std=0.02)
+
     def forward(self, x, y=None):
         B, T = x.shape
         token_emb = self.token_embedding_table(x)
@@ -127,22 +124,6 @@ class LanguageModel(nn.Module):
             idx = torch.cat((idx, new_token), 1)
         return idx
 
-    def _train(self, data, n_iter, lr):
-        self.train()
-        optim = torch.optim.AdamW(self.parameters(), lr)
-        for i in range(n_iter):
-            x, y = get_batch(data)
-            optim.zero_grad()
-            with torch.autocast(device_type=device, dtype=torch.bfloat16):
-                loss = self(x, y)
-            if i% 100 == 0:
-                print(loss.item())
-            loss.backward()
-            optim.step()
-            if i% (n_iter/100) == 0:
-                print(int(((i+1)/n_iter)*100))
-        self.eval()
-
 if __name__ == '__main__':
     with open('tokenized_data.pkl', 'rb') as f:
         tokens = pickle.load(f)
@@ -150,8 +131,11 @@ if __name__ == '__main__':
     val_tokens = tokens[n:]
     val_tokens = torch.tensor(tokens).to(device)
     model = LanguageModel(tokenizer.n_vocab)
+    total_params = sum(p.numel() for p in model.parameters())
+    print(f'The number of parameters is: {total_params}')
+    #The number of parameters is: 51120721
     model = model.to(device)
-    model = torch.compile(model)
-    model.load_state_dict(torch.load('parameters.pth', map_location=torch.device(device)))
+    # model = torch.compile(model)
+    model.load_state_dict(torch.load('parameters.pth'))
     val_loss = get_loss(val_tokens, model)
     print(f'Validation loss is {val_loss}')
