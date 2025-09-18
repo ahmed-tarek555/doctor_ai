@@ -1,8 +1,8 @@
 import torch
-import tiktoken
+import json
 import pickle
 
-batch_size = 32
+batch_size = 16
 block_size = 256
 device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
@@ -11,7 +11,8 @@ class DataLoader:
         self.B = batch_size
         self.T = block_size
         with open(tokens_file, 'rb') as f:
-            tokens = pickle.load(f)
+            tokens = json.load(f)
+        print(f'{len(tokens)} tokens loaded')
         self.tokens = torch.tensor(tokens)
         self.current_position = 0
 
@@ -22,7 +23,6 @@ class DataLoader:
         self.current_position += self.B*self.T
         if self.current_position + (self.B*self.T+1) > len(self.tokens):
             self.current_position = 0
-            x, y = x.to(device), y.to(device)
         return x, y
 
 with torch.no_grad():

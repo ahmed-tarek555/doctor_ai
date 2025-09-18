@@ -1,6 +1,4 @@
-import pickle
 import json
-from utils import text
 import tiktoken
 
 
@@ -66,5 +64,4 @@ class Tokenizer:
 
 
 if __name__ == '__main__':
-    with open('chat_templated_convo.jsonl', mode='r') as f:
-        convo = json.load(f)
+  print(tokenizer.encode('<bos>'))
